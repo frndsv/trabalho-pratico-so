@@ -4,9 +4,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Scanner;
 import java.io.File;
@@ -146,6 +148,25 @@ public class App {
         return true;
     }
 
+    /**  Método auxiliar para fazer uma copia dos prcoessos que vão ser usados para os métodos de escalonamento. Presicamos desse método porque sempre que vai ser executado um novo algoritmo de escalonamento, é preciso que os valores estejam como os iniciais, e o jeito mais fácil de garantir isso é sempre pegando uma copia dos processos.
+     * @return Uma copia dos processos que vieram do arquivo cadastrado.
+     */
+    private static List<Processo> copiarProcessos() {
+        
+        List<Processo> copia = new ArrayList<>();
+
+        for (Processo p : processosCadastrados) {
+            copia.add(new Processo(
+                p.pid,
+                p.chegada,
+                p.burst,
+                p.prioridade,
+                new ArrayList<>(p.ioInstantes)
+            ));
+        }
+
+        return copia;
+    }
     
 
     /**  Método para imprimir as métricas dos processos. É chamado ao final de um algoritmo de escalonamento pra imprimir as métricas dele.
@@ -153,26 +174,28 @@ public class App {
      */
     private static void imprimirMetricas(List<Processo> ps, int tempoTotal, String nome) {
 
-        int totalEspera = 0;
+        // Variáveis para serem utilizadas no cálculo
+        int totalEspera = 0; 
         int totalTurnaround = 0;
         int n = ps.size();
 
         
         System.out.println("\n=== RESULTADO " + nome + " ===");
 
+        // For para percorrer os processos
         for (Processo p : ps) {
-            int turnaround = p.tempoFinal - p.chegada;
+            int turnaround = p.tempoFinal - p.chegada; // Calcula o tempo de retorno do processo
 
-            totalEspera += p.tempoEspera;
-            totalTurnaround += turnaround;
-
+            totalEspera += p.tempoEspera; // Soma o tempo de espera do processo atual na variável que vai ser usada pra média
+            totalTurnaround += turnaround; // Soma o tempo de retorno (turnaround) do processo atual na variável que vai ser usada pra média
 
         }
 
-        double mediaEspera = (double) totalEspera / n;
-        double mediaTurnaround = (double) totalTurnaround / n;
-        double throughput = (double) n / tempoTotal;
+        double mediaEspera = (double) totalEspera / n; // Calcula a média de espera total: Soma das esperas de cada process / quantidade de processos
+        double mediaTurnaround = (double) totalTurnaround / n; // Calcula a média de tempo de retorno (turnaround): Soma dos tempos de retorno de cada process / quantidade de processos
+        double throughput = (double) n / tempoTotal; // Calcula a vazão (Throughput): Quantidade de processos / tempo total gasto no escalonamento
 
+        // Imprimindo cada mética na tela :D
         System.out.println("\n=== MÉTRICAS ===");
         System.out.printf("Tempo médio de espera: %.2f ms\n", mediaEspera);
         System.out.printf("Tempo médio de turnaround: %.2f ms\n", mediaTurnaround);
@@ -185,8 +208,8 @@ public class App {
      */
     private static void escalonamentoFirstComeFirstServed() {
 
-        // Lista de processos carregados do arquivo
-        List<Processo> ps = processosCadastrados;
+        // Lista de processos copiados usando os originais do arquivo
+        List<Processo> ps = copiarProcessos();
 
         // Fila dos processos prontos
         Queue<Processo> fila = new LinkedList<>();
@@ -211,23 +234,23 @@ public class App {
             }
 
             // Iterador para passar pelos processos que estão bloqueados
-            Iterator<Processo> it = bloqueados.iterator();
+            Iterator<Processo> itProcesso = bloqueados.iterator();
 
             // While que executa enquanto existir algum processo que esta bloqueado para subtrair o tempo que ele passou bloqueado
-            while (it.hasNext()) {
-                Processo p = it.next();
+            while (itProcesso.hasNext()) {
+                Processo p = itProcesso.next();
                 p.tempoBloqueado--;
 
                 // If para conferir se acabou o tempo bloqueado. Se tiver acabado, aquele processo volta pra fica de processos prontos para voltar a ser executado e sai da fila de processos bloqueados.
                 if (p.tempoBloqueado == 0) {
                     fila.add(p);
-                    it.remove();
+                    itProcesso.remove();
                 }
             }
 
             // Se a CPU estiver livre, pega o próximo processo da fila
             if (atual == null && !fila.isEmpty()) {
-                atual = fila.poll(); // Pega o primeiro processo da fila E tira ele da fila de processos.
+                atual = fila.poll(); // Pega o primeiro processo da fila
             }
 
             // Execução do prcoesso em si
@@ -237,7 +260,7 @@ public class App {
                 // Soma o tempo executado do processo que está sendo executado porque ele foi executado por 1 segundo 
                 atual.tempoExecutado++;
 
-                // Conferir instantes de I/O. Se ainda tem algum I/O para fazer e chegou nesse tempo, entra em I/O.
+                // Conferir instantes de I/O. Se ainda tem algum I/O para fazer e chegou no tempo referente ao I/O, entra em I/O
                 if (atual.ioIndex < atual.ioInstantes.size() && atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex)) {
 
                     atual.tempoBloqueado = 5; // Tempo que vai ficar bloqueado (Fixo, vindo do enunciado :D)
@@ -258,7 +281,7 @@ public class App {
 
             // Gerenciar espera dos processos na fila
             for (Processo p : fila) {
-                p.tempoEspera++; // Soma + 1 ao tempo de espera do processo porque precisamos guardar o tempo que o processo fica em espera.
+                p.tempoEspera++; // Soma + 1 ao tempo de espera do processo porque precisamos guardar o tempo que um processo fica em espera até ele terminar
             }
 
             tempo++; // Soma o tempo :)
@@ -273,8 +296,104 @@ public class App {
      * @return Métricas de Tempo de Espera Médio, Tempo de Retorno (Turnaround ) Médio e Vazão (Throughput) .
      */
     private static void escalonamentoShortestRemainingTimeFirst() {
-        System.out.println("Ainda nao ta pronto :P ...");
+
+        // Lista de processos copiados usando os originais do arquivo
+        List<Processo> ps = copiarProcessos();
+
+        // Fila com prioridade, que mantem o processo com o menor tempo restante no topo. P.restante sendo o atribuito de um Processo, referente ao tempo que falta para o processo termianr de ser executado
+        PriorityQueue<Processo> fila = new PriorityQueue<>(Comparator.comparingInt(p -> p.restante));
+
+        // Fila para os prcoessos que estão bloqueados (I/O)
+        List<Processo> bloqueados = new ArrayList<>();
+
+        // Processo atual
+        Processo atual = null;
+
+        // Tempo :)
+        int tempo = 0;
+
+        // While que executa o algoritmo de escalonamento mesmo. Executa até que todos os processos sejam terminados
+        while (!todosFinalizados(ps)) {
+
+            // Processos que chegam: For para verificar se algum processo chega no tempo atual
+            for (Processo p : ps){
+                if (p.chegada == tempo) {
+                    fila.add(p);
+                } 
+            }
+
+            // Iterador para passar pelos processos que estão bloqueados
+            Iterator<Processo> itProcesso = bloqueados.iterator();
+
+            // While que executa enquanto existir algum processo que está bloqueado para subtrair o tempo que ele passou bloqueado
+            while (itProcesso.hasNext()) {
+                Processo p = itProcesso.next();
+                p.tempoBloqueado--;
+
+                // If para conferir se acabou o tempo bloqueado. Se tiver acabado, aquele processo volta pra fila de processos prontos para voltar a ser executado e sai da fila de processos bloqueados
+                if (p.tempoBloqueado == 0) {
+                    fila.add(p);
+                    itProcesso.remove();
+                }
+            }
+
+            // Diferente do First come First Served!!! La, confere se a CPU ta liVre e pega o próximo da fila. Aqui ele faz outra verificação
+            if (atual != null && !fila.isEmpty()) {
+                // Pega o menor processo na fila atual
+                Processo menor = fila.peek();
+                // Confere se o tempo restante do processo que esta no topo da fila como menor é menor do que o tempo restante do processo que está sendo executado atualmente
+                if (menor.restante < atual.restante) {
+                    // Se o menor for menor que o atual, o atual volta pra fila.
+                    fila.add(atual);
+                    // O atual agora se torna o processo que antes era o menor
+                    atual = fila.poll();
+                }
+            }
+
+            // Se a CPU estiver livre, pega o próximo processo na fila
+            if (atual == null && !fila.isEmpty()) {
+                atual = fila.poll(); // Pega o primeiro processo da fila 
+            }
+
+
+            // Execução do processo em si
+            if (atual != null) {
+                // Subtrai o tempo restante do processo que está sendo executado porque ele foi executado por 1 segundo
+                atual.restante--;
+                // Soma o tempo executado do processo que está sendo executado porque ele foi executado por 1 segundo
+                atual.tempoExecutado++;
+
+                // Conferir instantes de I/O. Se ainda tem algum I/O para fazer e chegou no tempo referente ao I/O, entra em I/O
+                if (atual.ioIndex < atual.ioInstantes.size() && atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex)) {
+
+                    atual.tempoBloqueado = 5; // Tempo que vai ficar bloqueado (Fixo, vindo do enunciado :D)
+                    bloqueados.add(atual); // O processo atual que vai entra rem I/O vai pra fila de bloqueados
+                    atual.ioIndex++; // Se tiver algum, vai pegar o index do próximo I/O que o processo vai ter 
+                    atual = null; // livre pro próximo proesso que precisar da CPU
+                }
+
+                // Conferir se o processo terminou
+                else if (atual.restante == 0) {
+                    atual.finalizado = true; // Guarda que o processo está como finalizado
+                    atual.tempoFinal = tempo + 1; // Guarda o momento que ele finalizou
+                    atual = null; // Livre pro próximo que precisar da CPU
+                }
+
+                // Se o processo não entrar em I/O ou finalizar, na próxima execução do While, ele vai conferir novamente se algum processo chegou e é menor que o que está sendo executado atualmente. Se o novo for menor, aí sim o "atual" vai ser trocado pelo menor e ele vai passar a ser exeutado. Um processo só sai da fila se ele for entrar em I/O, terminar ou algum processo menor que ele chegar. Isso é a lógica do Shortest Remaining Time First
+            }
+
+            // Gerenciar espera dos processos na fila
+            for (Processo p : fila) {
+                p.tempoEspera++; // Soma + 1 ao tempo de espera do processo porque precisamos guardar o tempo que um processo fica em espera até ele terminar
+            }
+
+            tempo++; // Soma o tempo :)
+
+        }
+
+        imprimirMetricas(ps, tempo, "SHORTEST REMAINING TIME FIRST");
     }
+
 
     /**  Escalonamento circular onde o valor do quantum é recalculado a cada troca de contexto para ser igual á menor média exponencial (τ ) entre os processos na fila de prontos. Considerando α = 0.5, τ0 = 10ms.
      * @return Métricas de Tempo de Espera Médio, Tempo de Retorno (Turnaround ) Médio e Vazão (Throughput) .
