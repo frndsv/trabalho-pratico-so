@@ -311,10 +311,21 @@ public class App {
     private static void escalonamentoMultiLevelQueue() {
 
         List<Processo> ps = copiarProcessos(processosCadastrados); //copia processos da lista de processos cadastrados
+
         Queue<Processo> alta = new LinkedList<>(); // lista de processos de alta prioridade
         Queue<Processo> baixa = new LinkedList<>(); // lista de processos de baixa prioridade
         List<Processo> bloqueados = new ArrayList<>(); // lista de processos bloqueados porque estão em I/O
 
+
+        Processo atual = null; // null significa que ninguém está usando a CPU
+
+        int tempo = 0;
+        int quantumAlta = 4; // quantum fixo do round robin
+        int quantumRestante = 0; // quanto falta de quantum para o processo atual
+
+        while(!todosFinalizados(ps)){
+            
+        }
     }
 
 
