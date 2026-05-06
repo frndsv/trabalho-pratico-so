@@ -45,7 +45,6 @@ public class App {
     }
    
     static <T extends Number> T lerOpcao(String mensagem, Class<T> classe) {
-        
     	T valor;
         
     	System.out.println(mensagem);
@@ -136,6 +135,27 @@ public class App {
         return lista;
     }
 
+    /** Metodo auxiliar para criar uma nova lista de processos, para nao utilizar porcessos ja modificados por outros metodos
+     * @return Lista de processos.
+     */
+    private static List<Processo> copiarProcessos(List<Processo> origem) {
+        List<Processo> copia = new ArrayList<>();
+
+        for (Processo p : origem) {
+            Processo novo = new Processo(
+                p.pid,
+                p.chegada,
+                p.restante,
+                p.prioridade,
+                new ArrayList<>(p.ioInstantes)
+            );
+
+            copia.add(novo);
+        }
+
+        return copia;
+    }
+
     /**  Método auxiliar para conferir se todos os processos terminarama a execução.
      * @return Valor boolean. True caso todos os processos estejam terminados, false se algum processo ainda não tiver terminado.
      */
@@ -186,7 +206,7 @@ public class App {
     private static void escalonamentoFirstComeFirstServed() {
 
         // Lista de processos carregados do arquivo
-        List<Processo> ps = processosCadastrados;
+        List<Processo> ps = copiarProcessos(processosCadastrados);
 
         // Fila dos processos prontos
         Queue<Processo> fila = new LinkedList<>();
@@ -289,7 +309,12 @@ public class App {
      * @return Métricas de Tempo de Espera Médio, Tempo de Retorno (Turnaround ) Médio e Vazão (Throughput) .
      */
     private static void escalonamentoMultiLevelQueue() {
-        System.out.println("Ainda nao ta pronto :P ...");
+
+        List<Processo> ps = copiarProcessos(processosCadastrados); //copia processos da lista de processos cadastrados
+        Queue<Processo> alta = new LinkedList<>(); // lista de processos de alta prioridade
+        Queue<Processo> baixa = new LinkedList<>(); // lista de processos de baixa prioridade
+        List<Processo> bloqueados = new ArrayList<>(); // lista de processos bloqueados porque estão em I/O
+
     }
 
 
