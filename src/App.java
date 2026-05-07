@@ -343,7 +343,7 @@ public class App {
             }
 
             // Iterador para passar pelos processos que estão bloqueados
-            Iterator<Processo> itProcesso = bloqueados.iterator();
+            Iterator<Processo> itProcesso = bloqueados.iterator(); 
 
             // While que executa enquanto existir algum processo que está bloqueado para subtrair o tempo que ele passou bloqueado
             while (itProcesso.hasNext()) {
@@ -387,7 +387,7 @@ public class App {
                 if (atual.ioIndex < atual.ioInstantes.size() && atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex)) {
 
                     atual.tempoBloqueado = 5; // Tempo que vai ficar bloqueado (Fixo, vindo do enunciado :D)
-                    bloqueados.add(atual); // O processo atual que vai entra rem I/O vai pra fila de bloqueados
+                    bloqueados.add(atual); // O processo atual que vai entra tem I/O vai pra fila de bloqueados
                     atual.ioIndex++; // Se tiver algum, vai pegar o index do próximo I/O que o processo vai ter 
                     atual = null; // livre pro próximo proesso que precisar da CPU
                 }
@@ -443,12 +443,97 @@ public class App {
         int quantumRestante = 0; // quanto falta de quantum para o processo atual
 
         while(!todosFinalizados(ps)){
-            
+
+            // 1. Adiciona processos que chegaram no tempo atual
+            for (Processo p : ps) {
+                if (p.chegada == tempo) {
+                    if (p.prioridade == 1) { // se a prioridade do processo for 1 vai para a fila de alta prioridade
+                        alta.add(p);
+                    } else { // o resto vai pra fila de baixa prioridade
+                        baixa.add(p);
+                    }
+                }
+            }
+
+            //usa Iterator porque dentro do loop serão removidos processos da lista, o que pode dar erro com for each
+            Iterator<Processo> itProcesso = bloqueados.iterator();
+
+            //executa enquanto ainda existir processo dentro da lista de bloqueados
+            while(itProcesso.hasNext()){ 
+                Processo p = itProcesso.next(); // recebe o proximo processo do iterator
+                p.tempoBloqueado --; //diminui o tempo q o processo foi bloqueado
+                if(p.tempoBloqueado == 0){
+                    if (p.prioridade == 1) { // se a prioridade do processo for 1 vai para a fila de alta prioridade
+                        alta.add(p);
+                    } else { // o resto vai pra fila de baixa prioridade
+                        baixa.add(p);
+                    }
+                    itProcesso.remove();
+                }
+            }
+
+            //verifica se tem algum processso na fila de alta prioridade para executar enquanto um de baixa esta executando
+            if(atual != null && atual.prioridade != 1 && !alta.isEmpty()){ 
+                baixa.add(atual);//adiciona o processo atual de baixa prioridade de volta para a fila de baixa prioridade
+                atual = null; //retira o processo atual para que outro execute
+            }
+
+            if(atual == null){//verifica se tem algum processo na cpu
+                if(!alta.isEmpty()){//verifica se tem processos na fila de alta prioridade
+                    atual = alta.poll();//remove o primeiro da fila alta e coloca na cpu
+                    quantumRestante = quantumAlta;//define o quantum do processo igual ao quantum fixo do RR
+                } else if(!baixa.isEmpty()){//verifica se tem processos na fila de baixa prioridade
+                    atual = baixa.poll();//remove o primeiro da fila baixa e coloca na cpu
+                    quantumRestante = Integer.MAX_VALUE;//define o quantum do processo o maior possivel para funcionar como um FCFS
+                }
+            }
+
+            if(atual == null){//verifica se nao tem processos 
+                tempo++;
+                continue; //pula pra proxima iteraçao do while 
+            }
+
+            //executa o processo uma unidade de tempo
+            atual.restante--;
+            atual.tempoExecutado++;
+            quantumRestante--;
+
+            //incrementa o tempo de espera dos processos que nao estao em execução nas duas filas
+            for(Processo p : alta){
+                p.tempoEspera++;
+            }
+            for(Processo p : baixa){
+                p.tempoEspera++;
+            }
+
+            //verifica se o processo terminou
+            if(atual.restante == 0){
+                atual.finalizado = true;
+                atual.tempoFinal = tempo + 1;
+                atual = null;
+            }
+
+            //verifica se o processo precisa fazer I/O
+            else if(atual.ioIndex < atual.ioInstantes.size() &&
+             atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex) ){ 
+                atual.tempoBloqueado = 5; // tempo que o processo vai ficar bloqueado de acordo com o enunciado :D
+                bloqueados.add(atual); // adiciona o processo a lista de bloqueados
+                atual.ioIndex++;
+                atual = null;
+            }
+
+            //executa o roundRobin na fila de alta prioridade
+            else if(atual.prioridade == 1 && quantumRestante == 0){
+                alta.add(atual);
+                atual = null;
+            }
+
+            //conta o tempo
+            tempo++;
         }
+
+        imprimirMetricas(ps, tempo, "MULTILEVEL QUEUE");
     }
-
-
-
 
 
 }
