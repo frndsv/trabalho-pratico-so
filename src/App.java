@@ -168,26 +168,7 @@ public class App {
         return true;
     }
 
-    /**  Método auxiliar para fazer uma copia dos prcoessos que vão ser usados para os métodos de escalonamento. Presicamos desse método porque sempre que vai ser executado um novo algoritmo de escalonamento, é preciso que os valores estejam como os iniciais, e o jeito mais fácil de garantir isso é sempre pegando uma copia dos processos.
-     * @return Uma copia dos processos que vieram do arquivo cadastrado.
-     */
-    private static List<Processo> copiarProcessos() {
-        
-        List<Processo> copia = new ArrayList<>();
 
-        for (Processo p : processosCadastrados) {
-            copia.add(new Processo(
-                p.pid,
-                p.chegada,
-                p.burst,
-                p.prioridade,
-                new ArrayList<>(p.ioInstantes)
-            ));
-        }
-
-        return copia;
-    }
-    
 
     /**  Método para imprimir as métricas dos processos. É chamado ao final de um algoritmo de escalonamento pra imprimir as métricas dele.
      * @return Métricas de Tempo de Espera Médio, Tempo de Retorno (Turnaround ) Médio e Vazão (Throughput).
@@ -219,7 +200,7 @@ public class App {
         System.out.println("\n=== MÉTRICAS ===");
         System.out.printf("Tempo médio de espera: %.2f ms\n", mediaEspera);
         System.out.printf("Tempo médio de turnaround: %.2f ms\n", mediaTurnaround);
-        System.out.printf("Throughput: %.2f processos/segundo\n", throughput * 1000);
+        System.out.printf("Throughput: %.2f processos/unidade de tempo\n", throughput);
 
     }
 
@@ -229,7 +210,7 @@ public class App {
     private static void escalonamentoFirstComeFirstServed() {
 
         // Lista de processos copiados usando os originais do arquivo
-        List<Processo> ps = copiarProcessos();
+        List<Processo> ps = copiarProcessos(processosCadastrados);
 
         // Fila dos processos prontos
         Queue<Processo> fila = new LinkedList<>();
@@ -280,8 +261,16 @@ public class App {
                 // Soma o tempo executado do processo que está sendo executado porque ele foi executado por 1 segundo 
                 atual.tempoExecutado++;
 
+                
+                // Conferir se o processo terminou
+                if(atual.restante == 0) {
+                    atual.finalizado = true; // Guarda que o processo esta como finalizado
+                    atual.tempoFinal = tempo + 1; // Guarda o momento que ele finalizou
+                    atual = null; // Livre pro próximo processo que precisar da CPU
+                }
+
                 // Conferir instantes de I/O. Se ainda tem algum I/O para fazer e chegou no tempo referente ao I/O, entra em I/O
-                if (atual.ioIndex < atual.ioInstantes.size() && atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex)) {
+                else if (atual.ioIndex < atual.ioInstantes.size() && atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex)) {
 
                     atual.tempoBloqueado = 5; // Tempo que vai ficar bloqueado (Fixo, vindo do enunciado :D)
                     bloqueados.add(atual); // O processo atual que vai entrar em I/O vai pra fila de bloqueados
@@ -289,12 +278,6 @@ public class App {
                     atual = null; // Livre pro próximo processo que precisar da CPU
                 }
 
-               // Conferir se o processo terminou
-                else if (atual.restante == 0) {
-                    atual.finalizado = true; // Guarda que o processo esta como finalizado
-                    atual.tempoFinal = tempo + 1; // Guarda o momento que ele finalizou
-                    atual = null; // Livre pro próximo processo que precisar da CPU
-                }
 
                 // Se o processo não entrar em I/O ou finalizar, na próxima execução do While, vai continuar nele até ele terminar. Isso é a lógica First-Come, First-Served :D
             }
@@ -318,7 +301,7 @@ public class App {
     private static void escalonamentoShortestRemainingTimeFirst() {
 
         // Lista de processos copiados usando os originais do arquivo
-        List<Processo> ps = copiarProcessos();
+        List<Processo> ps = copiarProcessos(processosCadastrados);
 
         // Fila com prioridade, que mantem o processo com o menor tempo restante no topo. P.restante sendo o atribuito de um Processo, referente ao tempo que falta para o processo termianr de ser executado
         PriorityQueue<Processo> fila = new PriorityQueue<>(Comparator.comparingInt(p -> p.restante));
@@ -382,21 +365,22 @@ public class App {
                 atual.restante--;
                 // Soma o tempo executado do processo que está sendo executado porque ele foi executado por 1 segundo
                 atual.tempoExecutado++;
+            
+                // Conferir se o processo terminou
+                if(atual.restante == 0) {
+                    atual.finalizado = true; // Guarda que o processo está como finalizado
+                    atual.tempoFinal = tempo + 1; // Guarda o momento que ele finalizou
+                    atual = null; // Livre pro próximo que precisar da CPU
+                }
+            
 
                 // Conferir instantes de I/O. Se ainda tem algum I/O para fazer e chegou no tempo referente ao I/O, entra em I/O
-                if (atual.ioIndex < atual.ioInstantes.size() && atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex)) {
+                else if (atual.ioIndex < atual.ioInstantes.size() && atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex)) {
 
                     atual.tempoBloqueado = 5; // Tempo que vai ficar bloqueado (Fixo, vindo do enunciado :D)
                     bloqueados.add(atual); // O processo atual que vai entra tem I/O vai pra fila de bloqueados
                     atual.ioIndex++; // Se tiver algum, vai pegar o index do próximo I/O que o processo vai ter 
                     atual = null; // livre pro próximo proesso que precisar da CPU
-                }
-
-                // Conferir se o processo terminou
-                else if (atual.restante == 0) {
-                    atual.finalizado = true; // Guarda que o processo está como finalizado
-                    atual.tempoFinal = tempo + 1; // Guarda o momento que ele finalizou
-                    atual = null; // Livre pro próximo que precisar da CPU
                 }
 
                 // Se o processo não entrar em I/O ou finalizar, na próxima execução do While, ele vai conferir novamente se algum processo chegou e é menor que o que está sendo executado atualmente. Se o novo for menor, aí sim o "atual" vai ser trocado pelo menor e ele vai passar a ser exeutado. Um processo só sai da fila se ele for entrar em I/O, terminar ou algum processo menor que ele chegar. Isso é a lógica do Shortest Remaining Time First
