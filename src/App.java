@@ -414,13 +414,113 @@ public class App {
         imprimirMetricas(ps, tempo, "SHORTEST REMAINING TIME FIRST");
     }
 
-
-    /**  Escalonamento circular onde o valor do quantum é recalculado a cada troca de contexto para ser igual á menor média exponencial (τ ) entre os processos na fila de prontos. Considerando α = 0.5, τ0 = 10ms.
-     * @return Métricas de Tempo de Espera Médio, Tempo de Retorno (Turnaround ) Médio e Vazão (Throughput) .
+    /** Escalonamento circular onde o valor do quantum é recalculado a cada troca de contexto 
+     * para ser igual à menor média exponencial (τ) entre os processos na fila de prontos. 
+     * @return Métricas de Tempo de Espera Médio, Tempo de Retorno (Turnaround) Médio e Vazão (Throughput).
      */
     private static void escalonamentoRoundRobin() {
-        System.out.println("Ainda nao ta pronto :P ...");
+        List<Processo> ps = copiarProcessos(processosCadastrados); // Copia processos da lista base
+        Queue<Processo> fila = new LinkedList<>(); // Fila de processos prontos
+        List<Processo> bloqueados = new ArrayList<>(); // Fila de bloqueados por I/O
+
+        Processo atual = null; // Processo na CPU
+        int tempo = 0;
+        int quantum = 0;
+        int tempoExecutadoNoQuantum = 0; // Representa o t_n (Duração real do último surto) 
+
+        while (!todosFinalizados(ps)) {
+
+            // 1. Adiciona processos que chegaram no tempo atual
+            for (Processo p : ps) {
+                if (p.chegada == tempo) {
+                    fila.add(p);
+                }
+            }
+
+            // 2. Gerenciamento de processos bloqueados em I/O
+            Iterator<Processo> itProcesso = bloqueados.iterator();
+            while (itProcesso.hasNext()) {
+                Processo p = itProcesso.next();
+                p.tempoBloqueado--;
+
+                // Se terminou o tempo de I/O, volta para a fila de prontos
+                if (p.tempoBloqueado == 0) {
+                    fila.add(p);
+                    itProcesso.remove();
+                }
+            }
+
+            // 3. Troca de Contexto e Definição do Quantum
+            if (atual == null && !fila.isEmpty()) {
+                
+                // Encontra a menor média exponencial (tau) entre os processos na fila
+                int menorTau = Integer.MAX_VALUE;
+                for (Processo p : fila) {
+                    if (p.tau < menorTau) {
+                        menorTau = p.tau;
+                    }
+                }
+                
+                // Define o novo quantum. Utiliza Math.max(1, ...) para garantir que o quantum nunca seja 0
+                quantum = Math.max(1, menorTau);
+                
+                atual = fila.poll();
+                tempoExecutadoNoQuantum = 0; // Reseta o relógio do surto atual para o novo processo (t_n começa zerado)
+            }
+
+            // 4. Se a CPU estiver livre (nenhum processo pronto), apenas avança o tempo
+            if (atual == null) {
+                tempo++;
+                continue;
+            }
+
+            // 5. Execução do processo na CPU
+            atual.restante--;
+            atual.tempoExecutado++;
+            tempoExecutadoNoQuantum++; // Conta quanto tempo durou este surto específico
+
+            // 6. Condições de Saída da CPU (Troca de Contexto)
+            boolean trocouContexto = false;
+
+            if (atual.restante == 0) {
+                // O processo finalizou a execução total
+                atual.finalizado = true;
+                atual.tempoFinal = tempo + 1;
+                trocouContexto = true;
+            } 
+            else if (atual.ioIndex < atual.ioInstantes.size() && atual.tempoExecutado == atual.ioInstantes.get(atual.ioIndex)) {
+                // O processo chegou em um instante onde precisa solicitar E/S (I/O)
+                atual.tempoBloqueado = 5; // Tempo fixo de bloqueio [cite: 34]
+                bloqueados.add(atual);
+                atual.ioIndex++;
+                trocouContexto = true;
+            } 
+            else if (tempoExecutadoNoQuantum >= quantum) {
+                // O quantum estourou (Preempção padrão do Round Robin)
+                fila.add(atual);
+                trocouContexto = true;
+            }
+
+            // 7. Recálculo da Média Exponencial (tau) ao sair da CPU
+            if (trocouContexto) {
+                // Aplicação da fórmula: tau_{n+1} = alfa * tn + (1 - alfa) * tau_n 
+                // Como tau é int na classe e alfa é 0.5[cite: 26], o Java trunca o decimal automaticamente.
+                atual.tau = (int) (0.5 * tempoExecutadoNoQuantum + 0.5 * atual.tau);
+                
+                atual = null; // Libera a CPU para o próximo ciclo
+            }
+
+            // 8. Gerenciar espera dos processos na fila
+            for (Processo p : fila) {
+                p.tempoEspera++; // Soma a espera de quem não está na CPU nem em I/O
+            }
+
+            tempo++; // O tempo geral do sistema passa :)
+        }
+
+        imprimirMetricas(ps, tempo, "ROUND ROBIN COM PREDIÇÃO");
     }
+
         
     /**  Implementar duas filas estáticas com prioridades fixas. A Fila 1 (Alta Prioridade) deve ser escalonada via Round-Robin (quantum fixo), e a Fila 2 (Baixa
     Prioridade) via FCFS (First-Come, First-Served ). Processos na Fila 2 só executam se a Fila 1
